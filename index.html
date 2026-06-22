@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Observatorio da Saude</title>
+
+  <!-- Leaflet 1.9.4 pinned -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <!-- Plotly.js 2.35.3 pinned (dist-min) -->
+  <script src="https://cdn.plot.ly/plotly-2.35.3.min.js" charset="utf-8"></script>
+
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header>
+    <h1>Observatorio da Saude</h1>
+    <nav id="tab-nav">
+      <button class="tab-btn active" data-tab="mapa">Mapa</button>
+      <button class="tab-btn" data-tab="series">Series Temporais</button>
+    </nav>
+  </header>
+
+  <!-- ── Tab: Mapa ────────────────────────────────────────────── -->
+  <main id="tab-mapa" class="tab-content active">
+    <div id="controles">
+      <label for="sel-faixa">Faixa etaria:</label>
+      <select id="sel-faixa"></select>
+      <label for="sel-ano">Ano:</label>
+      <select id="sel-ano"></select>
+      <label for="sel-habito">Habito SISVAN:</label>
+      <select id="sel-habito"></select>
+    </div>
+    <div class="mapas-container">
+      <div class="mapa-painel">
+        <div class="painel-header">
+          <h2>PNAES</h2>
+          <button class="btn-csv" id="btn-csv-pnaes">Exportar CSV</button>
+        </div>
+        <div id="map-pnaes" class="mapa"></div>
+        <div id="legenda-pnaes" class="legenda"></div>
+        <div class="ranking-container">
+          <div class="ranking-card">
+            <h3>Top 10 maiores</h3>
+            <table id="rank-pnaes-top"></table>
+          </div>
+          <div class="ranking-card">
+            <h3>Top 10 menores</h3>
+            <table id="rank-pnaes-bottom"></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="mapa-painel">
+        <div class="painel-header">
+          <h2>SISVAN</h2>
+          <button class="btn-csv" id="btn-csv-sisvan">Exportar CSV</button>
+        </div>
+        <div id="map-sisvan" class="mapa"></div>
+        <div id="legenda-sisvan" class="legenda"></div>
+        <div class="ranking-container">
+          <div class="ranking-card">
+            <h3>Top 10 maiores</h3>
+            <table id="rank-sisvan-top"></table>
+          </div>
+          <div class="ranking-card">
+            <h3>Top 10 menores</h3>
+            <table id="rank-sisvan-bottom"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── Tab: Series Temporais ────────────────────────────────── -->
+  <main id="tab-series" class="tab-content">
+    <div id="series-controles">
+      <label for="sel-series-faixa">Faixa etaria:</label>
+      <select id="sel-series-faixa"></select>
+      <label for="sel-series-nivel">Agregacao:</label>
+      <select id="sel-series-nivel">
+        <option value="nacional">Nacional</option>
+        <option value="regiao">Por Regiao</option>
+        <option value="uf">Por Estado</option>
+      </select>
+      <label for="sel-ano-ini">Ano inicial:</label>
+      <select id="sel-ano-ini"></select>
+      <label for="sel-ano-fim">Ano final:</label>
+      <select id="sel-ano-fim"></select>
+      <label for="sel-series-habito">Habito:</label>
+      <select id="sel-series-habito"></select>
+      <div id="series-grupo-container" style="display:none">
+        <label for="sel-series-grupo">Comparar:</label>
+        <select id="sel-series-grupo" multiple size="5"></select>
+        <span class="hint">Ctrl+clique para selecionar varios</span>
+      </div>
+    </div>
+    <div id="series-chart" style="width:100%;min-height:500px;"></div>
+    <p id="series-caption" class="caption"></p>
+
+    <section id="decomp-section">
+      <h3 class="decomp-titulo">Decomposicao: Tendencia + Sazonalidade + Residuo</h3>
+      <div id="decomp-controles">
+        <label for="sel-decomp-habito">Habito a decompor:</label>
+        <select id="sel-decomp-habito"></select>
+        <span id="decomp-grupo-container" style="display:none">
+          <label for="sel-decomp-grupo">Grupo:</label>
+          <select id="sel-decomp-grupo"></select>
+        </span>
+      </div>
+      <div id="decomp-chart" style="width:100%;min-height:560px;"></div>
+      <p id="decomp-caption" class="caption"></p>
+    </section>
+  </main>
+
+  <script type="module" src="assets/app.js"></script>
+</body>
+</html>
