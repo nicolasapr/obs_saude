@@ -1,57 +1,73 @@
-# VIZ_SPEC — semântica exata a reproduzir (extraída de scripts/load/viz.py)
+# Semântica dos dados e da visualização
 
-Fonte por (faixa, ano): `PNAES_FINAIS_DIR/{faixa}/PNAES_valores_{faixa}_{ano}_ajustado.xlsx`.
-O mapa do Streamlit renderiza **PNAES e SISVAN lado a lado** (não são abas/seletor de fonte).
+Especificação vigente em 19/10/2026. Substitui os atalhos necessários à primeira
+exportação, que tratava arquivos legados com duplicatas e colunas incompletas.
 
-## Controles
-- Ano: 2015..2025 (default 2024).
-- Faixa: `2a4`, `5a9`, `Adolescentes`.
-- Hábito SISVAN: 10 strings fixas (lista `HABITOS`, com acentos):
-  1. Hábito de realizar no mínimo as três refeições principais do dia
-  2. Hábito de realizar as refeições assistindo à televisão
-  3. Consumo de feijão
-  4. Consumo de fruta
-  5. Consumo de verduras e legumes
-  6. Consumo de Alimentos Ultraprocessados
-  7. Consumo de hambúrguer e/ou embutidos
-  8. Consumo de bebidas adoçadas
-  9. Consumo de macarrão instantâneo, salgadinho de pacote ou biscoito salgado
-  10. Consumo de biscoito recheado, doces ou guloseimas
-- Drill-down de estado: None (Brasil) ou uma UF → nível município (Issue 03).
+## Fontes e chaves
 
-## PNAES — métrica colorida
-- Coluna: `TOTAL`, com fallback `TOTAL_EF` (`col_total = "TOTAL" if "TOTAL" in cols else "TOTAL_EF"`). `pd.to_numeric(..., errors="coerce")`.
-- Estado: `groupby(["codigo_UF","UF"]).agg(valor=(col_total,"sum"), n_respostas=("codigo_IBGE","nunique"))`.
-- Município (Issue 03): `groupby(["codigo_IBGE","municipio","UF","regiao"]).agg(valor=(col_total,"sum"), n_respostas=(col_total,"count"))`.
-- Alguns arquivos de `Adolescentes` (2019, 2021, 2022) não têm `TOTAL` nem `TOTAL_EF` → pular com aviso.
+- PNAE: `pnaes/finais/{faixa}/PNAES_valores_{faixa}_{ano}_ajustado.xlsx`.
+- Mapas SISVAN: `sisvan/anuais/{ano}/sumario_anual_habitos_{faixa_longa}.xlsx`.
+- Séries: `sisvan/series/serie_mensal_{faixa_longa}.xlsx`, com sufixos
+  `_por_regiao` e `_por_uf` para os outros níveis.
+- Faixas: 2a4, 5a9 e Adolescentes; período: 2015–2024.
+- Chave municipal: código IBGE de seis dígitos. UF deve corresponder aos dois
+  primeiros dígitos. Duplicatas na fonte canônica causam erro, sem soma ou
+  descarte silencioso. As malhas municipais já estão normalizadas nessa chave.
 
-## SISVAN — métrica colorida (percentual)
-- `percentual_que_*` está CORROMPIDO (strings concatenadas). NÃO usar direto. Recomputar:
-  - `sufixo = habito` ; `col_que = total_que_{sufixo}` ; `col_all = total_all_{sufixo}`.
-  - `pct = (total_que / total_all * 100).clip(0,100)`.
-  - Fallback `_converter_pct` (strip "%", to_numeric) só se faltarem as colunas de contagem.
-- **Dedup antes de agregar**: `drop_duplicates(subset=["codigo_UF","UF","codigo_IBGE"])` (o finais tem 1-5 linhas/município, uma por programa PNAES; colunas SISVAN repetem).
-- Estado (média ponderada): após dedup, `groupby(["codigo_UF","UF"]).agg(soma_que=(col_que,"sum"), soma_all=(col_all,"sum"))`; `valor = soma_que/soma_all*100` (clip 0-100); `n_respostas = int(soma_all)`.
-- Município (Issue 03): após dedup, `groupby(["codigo_IBGE","municipio","UF","regiao"]).agg(valor=(col_pct,"mean"), n_respostas=(col_all,"first"))`.
+## Financiamento
 
-## "Sem dado"
-- `dropna(subset=["valor"])` após agregar (sai do df). No mapa: cor `lightgray`; tooltip `valor="N/D"`, `n_respostas="N/D"`.
+A coluna é `TOTAL` para crianças e `TOTAL_EF` para adolescentes, explicitamente.
+O exportador não calcula pesos demográficos, pesos de matrícula ou componentes
+financeiros. Esses cálculos permanecem no ETL científico.
 
-## Escala de cor / legenda
-- Colormap `YlOrRd`. `fill_opacity=0.75`, `line_opacity=0.2`. 6 faixas (equal-interval, default do folium). NaN = lightgray. Legenda com o label da métrica.
+No município, publica o total final; no estado, soma os totais municipais antes
+do arredondamento. As duas saídas são arredondadas a centavos; a soma de valores
+municipais já arredondados pode diferir alguns centavos do total estadual.
 
-## Ranking (top 10)
-- Estado: colunas `["UF","Estado",<label_valor>,"Respostas"]`, ordenado desc por valor. `Estado` = nome por UF. `Respostas`=int. Dois cards: "Top 10 maiores" (head 10) e "Top 10 menores" (tail 10 invertido).
-- Município (Issue 03): `["Município","UF","Estado",<label>,"Respostas"]`.
+Valores são nominais. O metadado `tipo_valor_fnde` registra `pago` até 2023 e
+`previsto` em 2024. O mapa não incorpora a deflação ou o denominador por
+matrícula do estudo analítico. Sua cobertura é a dos arquivos finais do ETL,
+não necessariamente a de todos os municípios financiados pelo FNDE.
 
-## CSV export
-- Exporta o `df_mapa` inteiro. Nome `mapa_{tipo}_{faixa}_{ano}.csv` (tipo: `pnaes_estados`, `sisvan_estados`, `pnaes_munic_{UF}`, `sisvan_munic_{UF}`).
-- Estado: `["codigo_UF","UF","codigo","valor","n_respostas"]`. Município: `["codigo_IBGE","municipio","UF","regiao","valor","n_respostas","codigo"]`.
+## Marcadores alimentares
 
-## Tooltips
-- Estado: UF, Estado(nome), valor (`,.2f`), Respostas (`,`).
-- Município: Município(nome), UF, Região, valor, Respostas.
+São dez: três refeições principais; refeições diante da televisão; feijão;
+fruta; verduras e legumes; ultraprocessados; hambúrguer e/ou embutidos; bebidas
+adoçadas; macarrão instantâneo, salgadinho ou biscoito salgado; biscoito recheado,
+doces ou guloseimas.
 
-## GeoJSON
-- `estados.json`: prop única `codarea` (string 2 dígitos) — casa direto com `codigo_UF` stringificado. Sem normalização.
-- `municipios` (Issue 03): `codarea` 7 dígitos → normalizar `codarea[:-1]` (6) para casar com `codigo_IBGE` (str 6). Nacional 54MB NÃO publicar; gerar por-UF e simplificar (mapshaper).
+Para cada marcador:
+
+- Município: `100 × total_que / total_all`.
+- Estado: `100 × soma(total_que) / soma(total_all)`.
+- Denominador nulo ou zero: ausência, e não 0%.
+- Numerador zero e denominador positivo: 0% observado.
+- Contagens negativas, não inteiras ou afirmativas superiores às válidas:
+  exportação interrompida, sem recortar artificialmente para 0–100%.
+
+As contagens anuais vêm diretamente dos sumários SISVAN, sem restringir a
+amostra aos municípios com dados financeiros. São registros de respostas;
+não se presume que sejam indivíduos distintos.
+
+## Séries e decomposição
+
+O percentual canônico mensal (razão de 0 a 1, arredondada a quatro casas pelo
+ETL) é conferido com os contadores e multiplicado por 100. Os dez campos estão
+sempre presentes no JSON. Ausência é `null`; nenhum valor é imputado na exportação.
+
+A decomposição aditiva de período 12 exige pelo menos 24 meses no intervalo.
+Somente nessa visualização, lacunas internas são interpoladas linearmente;
+pontas sem observações são aparadas. A legenda informa a quantidade de meses
+interpolados. Os arquivos de dados e as curvas observadas não são modificados.
+
+## Contrato com a interface
+
+São preservados os caminhos do catálogo, o JSON por estado e município,
+os rankings, o clique no estado e o CSV. O campo histórico `n_respostas`
+significa número de municípios no PNAE (1 em cada linha municipal), e soma de
+respostas válidas no SISVAN. A interface usa os rótulos correspondentes.
+
+O catálogo inclui 30 mapas estaduais financeiros e 300 alimentares, os
+correspondentes arquivos municipais para 27 UFs, nove séries e as malhas locais.
+Cada saída identifica `origem`; `proveniencia.json` registra os hashes SHA-256.
+Os mapas usam exclusivamente as malhas locais do IBGE, sem imagens CARTO.

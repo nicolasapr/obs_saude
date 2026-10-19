@@ -66,6 +66,10 @@ function fmtRespostas(n) {
   return Number(n).toLocaleString("pt-BR");
 }
 
+function labelContagem(fonte) {
+  return fonte === "pnaes" ? "Municípios" : "Respostas válidas";
+}
+
 function fmtLegendaValor(v, fonte) {
   if (fonte === "pnaes") {
     if (v >= 1e6) return "R$ " + (v / 1e6).toFixed(1) + "M";
@@ -156,14 +160,8 @@ function criarMapa(containerId) {
     maxZoom: 8,
   }).setView([-14.5, -53], 4);
 
-  L.tileLayer(
-    "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      subdomains: "abcd",
-      maxZoom: 19,
-    }
-  ).addTo(m);
+  // As malhas locais bastam para o mapa temático; não dependem de chave de tiles.
+  m.attributionControl.addAttribution('Malhas: <a href="https://www.ibge.gov.br/geociencias/organizacao-do-territorio/malhas-territoriais.html">IBGE</a>');
 
   // Info tooltip
   const info = L.control({ position: "topright" });
@@ -261,7 +259,7 @@ function pintarCamada(tipo, dadosJSON) {
           st.infoCtrl.update(
             `<strong>${uf}</strong> — ${nomeEstado}<br>` +
             `${label}: ${val}<br>` +
-            `Respostas: ${resp}`
+            `${labelContagem(fonte)}: ${resp}`
           );
         },
         mouseout: (e) => {
@@ -319,7 +317,7 @@ function montarRanking(tipo, rankData, labelValor) {
 
   function renderTable(rows) {
     if (rows.length === 0) return "<tr><td colspan='4'>Sem dados</td></tr>";
-    let html = `<thead><tr><th>UF</th><th>Estado</th><th>${labelValor}</th><th>Respostas</th></tr></thead><tbody>`;
+    let html = `<thead><tr><th>UF</th><th>Estado</th><th>${labelValor}</th><th>${labelContagem(fonte)}</th></tr></thead><tbody>`;
     rows.forEach((r) => {
       html += `<tr>
         <td>${r.uf}</td>
@@ -422,7 +420,7 @@ function pintarMunicipios(tipo, geoData, valData, ufCode) {
             `<strong>${nome}</strong><br>` +
             `UF: ${sigla} — Regiao: ${regiao}<br>` +
             `${label}: ${val}<br>` +
-            `Respostas: ${resp}`
+            `${labelContagem(fonte)}: ${resp}`
           );
         },
         mouseout: (e) => {
@@ -463,7 +461,7 @@ function montarRankingMunicipal(tipo, rankData, labelValor) {
 
   function renderTable(rows) {
     if (rows.length === 0) return "<tr><td colspan='5'>Sem dados</td></tr>";
-    let html = `<thead><tr><th>Municipio</th><th>UF</th><th>Regiao</th><th>${labelValor}</th><th>Respostas</th></tr></thead><tbody>`;
+    let html = `<thead><tr><th>Municipio</th><th>UF</th><th>Regiao</th><th>${labelValor}</th><th>${labelContagem(fonte)}</th></tr></thead><tbody>`;
     rows.forEach((r) => {
       html += `<tr>
         <td>${r.municipio}</td>
@@ -1008,7 +1006,7 @@ function serieMensalContinua(registros, slug, filtro) {
     if (v != null) mapa[d.mes] = v;
   });
   const meses = Object.keys(mapa).sort();
-  if (meses.length === 0) return { xs: [], ys: [] };
+  if (meses.length === 0) return { xs: [], ys: [], interpolados: 0 };
 
   const idx = (ym) => {
     const [y, mo] = ym.split("-").map(Number);
@@ -1031,6 +1029,7 @@ function serieMensalContinua(registros, slug, filtro) {
   }
 
   // interpolacao linear de lacunas internas (pontas ja sao validas)
+  let interpolados = 0;
   let last = 0;
   while (last < ys.length) {
     if (ys[last] != null) {
@@ -1038,7 +1037,10 @@ function serieMensalContinua(registros, slug, filtro) {
       while (next < ys.length && ys[next] == null) next++;
       if (next < ys.length && next > last + 1) {
         const passo = (ys[next] - ys[last]) / (next - last);
-        for (let j = last + 1; j < next; j++) ys[j] = ys[last] + passo * (j - last);
+        for (let j = last + 1; j < next; j++) {
+          ys[j] = ys[last] + passo * (j - last);
+          interpolados++;
+        }
       }
       last = next;
     } else {
@@ -1046,7 +1048,7 @@ function serieMensalContinua(registros, slug, filtro) {
     }
   }
 
-  return { xs, ys };
+  return { xs, ys, interpolados };
 }
 
 function renderDecomp() {
@@ -1084,7 +1086,7 @@ function renderDecomp() {
     escopo = grupo;
   }
 
-  const { xs, ys } = serieMensalContinua(data.dados, slug, filtro);
+  const { xs, ys, interpolados } = serieMensalContinua(data.dados, slug, filtro);
   const xsDia = xs.map((m) => m + "-01");
 
   if (xs.length < 24) {
@@ -1140,7 +1142,10 @@ function renderDecomp() {
   };
 
   Plotly.newPlot(chartDiv, traces, layout, { responsive: true, displayModeBar: true });
-  caption.textContent = `${xs.length} meses — modelo aditivo, periodo=12.`;
+  caption.textContent = `${xs.length} meses — modelo aditivo, periodo=12. ` +
+    (interpolados
+      ? `${interpolados} mês(es) sem observação preenchido(s) por interpolação linear apenas nesta decomposição.`
+      : "Sem interpolação de meses ausentes.");
 }
 
 // ── Initialization ──────────────────────────────────────────────────────

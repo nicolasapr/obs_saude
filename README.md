@@ -1,97 +1,83 @@
-# Dashboard Estatico -- Observatorio da Saude
+# Observatório da Saúde — dashboard estático
 
-Dashboard puramente estatico (HTML + JS vanilla, sem backend) que consome
-sumarios PNAES e SISVAN pre-gerados em JSON.  Publicavel diretamente no
-GitHub Pages.
+Mapas de financiamento do Programa Nacional de Alimentação Escolar (PNAE) e
+marcadores de consumo alimentar do Sistema de Vigilância Alimentar e Nutricional
+(SISVAN), com séries mensais de 2015 a 2024.
 
-## Pre-requisitos
+Site: https://nicolasapr.github.io/obs_saude/
 
-| Ferramenta | Para que |
-|---|---|
-| Python 3.10+ com venv do projeto (pandas, openpyxl) | Gerar os JSONs a partir dos sumarios `.xlsx` |
-| Node.js + mapshaper (`npm install -g mapshaper`) | Simplificar GeoJSON municipal (ja foi executado; so necessario para re-gerar `geo/municipios/`) |
+Este repositório publica os dados derivados e a interface HTML/JavaScript.
+O código de extração e transformação e o pacote de dados de origem ficam no
+[projeto científico](https://github.com/nicolasapr/observatorio-da-saude).
+As fórmulas financeiras são aplicadas naquele projeto. O exportador deste
+repositório consome os totais finais, sem aplicar os pesos novamente.
 
-> A geometria municipal ja esta gerada em `data/geo/municipios/`.
-> Se voce so quer publicar o dashboard, **nao precisa de Node/mapshaper**.
+## Reproduzir os dados
 
-## Passo 1 -- Gerar os dados
+Requer Python 3.12. Instale as dependências em um ambiente virtual:
 
-Dentro da raiz do projeto (onde fica `.venv/`):
-
-```bash
-source .venv/bin/activate
-python scripts/export_static_data.py
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-export.txt
+.venv/bin/python scripts/export_static_data.py --source /caminho/observatorio-da-saude/dados
 ```
 
-Isso le os sumarios finais PNAES (`dados/pnaes/finais/`) e as series
-SISVAN (`dados/sisvan/series/`) e grava tudo em `dashboard-estatico/data/`:
+A pasta de origem deve conter os produtos canônicos das três faixas e de todos
+os anos de 2015 a 2024. O pacote completo está na
+[Release dos dados](https://github.com/nicolasapr/observatorio-da-saude/releases/tag/dados-2015-2024-20261018).
+O exportador lê 69 planilhas: 30 finais financeiros, 30 anuais SISVAN e nove
+séries. Os arquivos de origem permanecem intactos.
 
-- `manifest.json` -- metadados (faixas, anos, metricas, habitos, caminhos)
-- `geo/` -- GeoJSON de estados e municipios por UF
-- `map/states/` -- dados PNAES e SISVAN agregados por UF
-- `map/municipios/` -- dados PNAES e SISVAN por municipio, por UF
-- `series/` -- series temporais mensais
+Cada arquivo gerado identifica a sua origem relativa. O arquivo
+[data/proveniencia.json](data/proveniencia.json) registra as regras e os SHA-256
+dos insumos e das saídas. Para reproduzir a data dos metadados, use
+`--generated-at` com o valor de `gerado_em` do manifesto. Para conferir os dados
+publicados contra as fontes, sem alterar saídas:
 
-## Passo 2 -- Testar localmente
-
-```bash
-cd dashboard-estatico
-python -m http.server 8000
+```sh
+.venv/bin/python scripts/export_static_data.py --source /caminho/observatorio-da-saude/dados --check
 ```
 
-Abra `http://localhost:8000` no navegador.  Verifique:
+O exportador valida todas as entradas em uma área temporária antes de substituir
+as saídas. Fonte ausente, duplicata municipal, contagem inválida ou percentual
+mensal incompatível com os contadores interrompe a exportação.
 
-- Aba **Mapa**: selecionar faixa/ano pinta o mapa coropletico; clicar em
-  um estado faz drill-down municipal.
-- Aba **Series Temporais**: selecionar faixa e habito mostra grafico de
-  linhas mensais. **Ano inicial/final** recortam o periodo (ex.: 2018-2022)
-  e filtram tanto o grafico quanto a decomposicao. Abaixo, a secao
-  **Decomposicao** exibe tendencia +
-  sazonalidade + residuo (modelo aditivo, periodo=12), calculada no
-  navegador a partir da serie carregada (>= 24 meses).
+## Testar e visualizar localmente
 
-## Passo 3 -- Publicar no GitHub Pages
+```sh
+.venv/bin/python -B -m unittest discover -s tests -v
+node tests/test_frontend.cjs
+python3 -m http.server 8000 --bind 127.0.0.1
+```
 
-1. Crie um repositorio no GitHub (pode ser o mesmo repo do projeto ou um
-   repo dedicado).
+Abra http://127.0.0.1:8000. Confira os filtros, o clique em um estado para mostrar
+municípios, os arquivos CSV e a aba de séries com decomposição.
 
-2. Faca push do conteudo:
+## Como interpretar
 
-   ```bash
-   git add dashboard-estatico/
-   git commit -m "feat: dashboard estatico para publicacao"
-   git push origin main
-   ```
+- PNAE: valores nominais, em reais. 2015–2023 representam pagamentos; 2024
+  representa valores previstos pelo FNDE. Não são valores deflacionados nem
+  repasses por matrícula. A coluna de contagem indica municípios.
+- SISVAN: os mapas usam os sumários anuais próprios, incluindo municípios sem
+  informação financeira. Percentuais estaduais são a razão entre somas de
+  respostas afirmativas e válidas, não a média dos percentuais municipais.
+  Respostas somadas entre meses não representam pessoas únicas.
+- Séries: os nove arquivos mensais canônicos são exportados em porcentagem.
+  Ausência permanece ausência. A decomposição no navegador usa interpolação
+  linear em lacunas internas e informa quantos meses foram preenchidos.
+- As malhas geográficas locais são do IBGE. O mapa temático não depende de
+  serviços externos de imagens de fundo nem de chaves de acesso.
 
-3. No GitHub, va em **Settings > Pages**:
-   - Source: **Deploy from a branch**
-   - Branch: `main`
-   - Folder: `/dashboard-estatico`  (ou `/docs` se voce copiar o conteudo
-     para `docs/`)
-   - Clique **Save**.
+As regras detalhadas estão em [VIZ_SPEC](docs/VIZ_SPEC.md), e a revisão de dados
+em [Atualização de outubro de 2026](docs/ATUALIZACAO-2026-10-19.md).
+Documentos antigos em `docs/issues/` registram o planejamento histórico.
 
-4. Apos 1-2 minutos o site estara disponivel em
-   `https://<usuario>.github.io/<repo>/`.
+## Publicar no GitHub Pages
 
-> **Nota:** Os pipelines de transform/extract continuam offline e intocados.
-> Dados brutos (`.xlsx`, `.csv` do SISVAN) **nao** vao para o site --
-> apenas os JSONs pre-gerados em `data/`.
+O site é servido da raiz de `main`. Em Settings → Pages, a configuração é
+Deploy from a branch, branch `main`, pasta `/ (root)`.
+Um push para essa branch dispara a publicação; um commit apenas local não
+atualiza o site.
 
-## Tamanho do `data/` gerado
-
-| Metrica | Valor |
-|---|---|
-| Arquivos JSON | 9.221 |
-| Tamanho bruto | 93 MB |
-| Tamanho gzip (soma per-file) | 18 MB |
-| Razao de compressao | ~20% |
-| Limite GitHub Pages | 1 GB por repositorio |
-
-O GitHub Pages serve com `Content-Encoding: gzip` automaticamente, entao o
-trafego real sera proximo de **18 MB**.
-
-## Stack
-
-- **Leaflet 1.9.4** (CDN, SRI pinned) -- mapas coropleticos
-- **Plotly.js 2.35.3** (CDN, versao pinned) -- series temporais
-- HTML + CSS + JS vanilla, sem build step, sem framework
+O repositório inclui `index.html`, `assets/`, as malhas em `data/geo/` e os
+JSONs gerados. Não é preciso publicar as planilhas ou os microdados do projeto.
